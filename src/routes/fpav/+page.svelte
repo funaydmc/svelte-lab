@@ -6,10 +6,10 @@
 
 
     let forward: number = $state(0);
-    let upward: number = $state(0);
+    let upward: number = $state(1);
     let right: number = $state(0);
     let steps: number = $state(1);
-    let angle: number = $state(0);
+    let angle: number = $state(360);
     let startAngle: number = $state(0);
     let hTranslation: number = $state(0);
     let vTranslation: number = $state(0);
@@ -40,7 +40,7 @@ let animationStarted = false;
         scene = new Scene();
         renderer = new WebGLRenderer({antialias: true, canvas});
         scene.background = new Color('#303030');
-        camera = new PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 10);
+        camera = new PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 100);
         camera.position.set(3, 3, 3);
         camera.lookAt(0, 0, 0);
 
@@ -177,7 +177,7 @@ let animationStarted = false;
         }
     }
 
-    function updatePoints() {
+    function updatePointsCurrent() {
         const newPoints: Vector3[] = [];
 
         const degToRad = Math.PI / 180;
@@ -224,6 +224,129 @@ let animationStarted = false;
         }
 
         points = newPoints;
+    }
+
+
+function updatePoints() {const newPoints: Vector3[] = [];
+
+const degToRad = Math.PI / 180;
+const durationSteps = steps * Math.floor(20 * duration);
+const hCycleLength = durationSteps / hCycles;
+const vCycleLength = durationSteps / vCycles;
+const rotationPerStep = (angle * degToRad) / durationSteps;
+
+// --- Initial Offset and Direction variables ---
+let offsetX = right;
+let offsetY = upward;
+let offsetZ = forward;
+
+// --- Apply initial rotation (startAngle) around the Y axis ---
+const startAngleRad = startAngle * degToRad;
+const startCos = Math.cos(startAngleRad);
+const startSin = Math.sin(startAngleRad);
+
+let tempOffsetX = offsetX * startCos - offsetZ * startSin;
+offsetZ = offsetX * startSin + offsetZ * startCos;
+offsetX = tempOffsetX;
+
+// --- Determine the 3D rotation axis ---
+let axisX, axisY, axisZ;
+const xzMagnitudeSq = offsetX * offsetX + offsetZ * offsetZ;
+
+// If the point is on the Y-axis (right=0, forward=0) or on the XZ-plane (upward=0),
+// default the circle to the XZ-plane, so the rotation axis is the Y-axis.
+if (xzMagnitudeSq < 1e-9 || Math.abs(offsetY) < 1e-9) {
+    axisX = 0;
+    axisY = 1;
+    axisZ = 0;
+} else {
+    // General case: calculate the rotation axis from the "horizontal tangent" condition
+    axisX = offsetX;
+    axisY = -xzMagnitudeSq / offsetY;
+    axisZ = offsetZ;
+}
+
+// Normalize the rotation axis vector
+const mag = Math.sqrt(axisX * axisX + axisY * axisY + axisZ * axisZ);
+if (mag > 1e-9) {
+    axisX /= mag;
+    axisY /= mag;
+    axisZ /= mag;
+} else {
+    // Fallback for the case where all inputs are 0, mag = 0
+    axisX = 0;
+    axisY = 1;
+    axisZ = 0;
+}
+
+// --- Main loop to generate points ---
+for (let step = 0; step < Math.min(durationSteps, steps * 50); step++) {
+    const heightOffset = vTranslation * (vCycleLength - Math.abs(vCycleLength - (step % (2 * vCycleLength)))) / vCycleLength;
+    const radialOffset = hTranslation * (hCycleLength - Math.abs(hCycleLength - (step % (2 * hCycleLength)))) / hCycleLength;
+
+    // --- MODIFIED LOGIC ---
+    // Determine the horizontal (radial) direction based on the current offset vector.
+    const offsetMag = Math.sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ);
+    const radialDirX = offsetMag > 1e-9 ? offsetX / offsetMag : 0;
+    const radialDirY = offsetMag > 1e-9 ? offsetY / offsetMag : 0;
+    const radialDirZ = offsetMag > 1e-9 ? offsetZ / offsetMag : 0;
+
+    // The final point is calculated by applying:
+    // - hTranslation (radialOffset) along the horizontal direction (radialDir)
+    // - vTranslation (heightOffset) along the vertical direction (the rotation axis)
+    const finalX = offsetX + (radialOffset * radialDirX) + (heightOffset * axisX);
+    const finalY = offsetY + (radialOffset * radialDirY) + (heightOffset * axisY);
+    const finalZ = offsetZ + (radialOffset * radialDirZ) + (heightOffset * axisZ);
+
+    const point = new Vector3(finalX, finalY, finalZ);
+    newPoints.push(point);
+
+    // Rotate the base offset for the next step
+    if (step < durationSteps - 1) {
+        const cos = Math.cos(rotationPerStep);
+        const sin = Math.sin(rotationPerStep);
+        const oneMinusCos = 1 - cos;
+
+        // Rodrigues' rotation formula
+        const rotateVector = (x: number, y: number, z: number) => {
+            const dotProduct = x * axisX + y * axisY + z * axisZ;
+            const crossX = axisY * z - axisZ * y;
+            const crossY = axisZ * x - axisX * z;
+            const crossZ = axisX * y - axisY * x;
+            const newX = x * cos + crossX * sin + axisX * dotProduct * oneMinusCos;
+            const newY = y * cos + crossY * sin + axisY * dotProduct * oneMinusCos;
+            const newZ = z * cos + crossZ * sin + axisZ * dotProduct * oneMinusCos;
+            return { x: newX, y: newY, z: newZ };
+        };
+
+        const rotatedOffset = rotateVector(offsetX, offsetY, offsetZ);
+        offsetX = rotatedOffset.x;
+        offsetY = rotatedOffset.y;
+        offsetZ = rotatedOffset.z;
+    }
+}
+
+points = newPoints;
+}
+
+    function rotateVector3(v: Vector3, k: Vector3, theta: number): Vector3 {
+        const cosTheta = Math.cos(theta);
+        const sinTheta = Math.sin(theta);
+
+        // Tích vô hướng: k_dot_v
+        const k_dot_v = k.x * v.x + k.y * v.y + k.z * v.z;
+
+        // Tích có hướng: k_cross_v
+        const k_cross_v_x = k.y * v.z - k.z * v.y;
+        const k_cross_v_y = k.z * v.x - k.x * v.z;
+        const k_cross_v_z = k.x * v.y - k.y * v.x;
+
+        // Áp dụng công thức Rodrigues
+        const v_rot_x = v.x * cosTheta + k_cross_v_x * sinTheta + k.x * k_dot_v * (1 - cosTheta);
+        const v_rot_y = v.y * cosTheta + k_cross_v_y * sinTheta + k.y * k_dot_v * (1 - cosTheta);
+        const v_rot_z = v.z * cosTheta + k_cross_v_z * sinTheta + k.z * k_dot_v * (1 - cosTheta);
+
+        return new Vector3(v_rot_x, v_rot_y, v_rot_z);
     }
 
     function resizeCanvas() {
