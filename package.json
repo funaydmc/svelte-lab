@@ -18,10 +18,14 @@
 		"@sveltejs/adapter-cloudflare": "^7.1.2",
 		"@sveltejs/kit": "^2.22.0",
 		"@sveltejs/vite-plugin-svelte": "^6.0.0",
+		"@types/three": "^0.178.1",
 		"svelte": "^5.0.0",
 		"svelte-check": "^4.0.0",
 		"typescript": "^5.0.0",
 		"vite": "^7.0.4",
 		"wrangler": "^4.27.0"
+	},
+	"dependencies": {
+		"three": "^0.179.1"
 	}
 }
