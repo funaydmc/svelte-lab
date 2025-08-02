@@ -18,6 +18,10 @@
     let radius: number = $state(0.05);
     let duration: number = $state(1);
     let frequency: number = $state(0.05);
+let fps: number = $state(0);
+const fpsSamples = 30;
+let frameTimes: number[] = [];
+let animationStarted = false;
 
     let points: Vector3[] = $state([
         new Vector3(0, 0, 0)
@@ -30,6 +34,7 @@
     let camera: PerspectiveCamera;
     let controls: OrbitControls;
     let spheres: Mesh[] = [];
+// Remove old FPS variables
 
     function initScene() {
         scene = new Scene();
@@ -38,19 +43,22 @@
         camera = new PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 10);
         camera.position.set(3, 3, 3);
         camera.lookAt(0, 0, 0);
-        
+
         // Create axes
         createAxes();
-        
+
         // Create initial spheres
         updateSpheres();
-        
+
         controls = new OrbitControls(camera, canvas);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        
+
         resizeCanvas();
-        animate();
+        if (!animationStarted) {
+            animationStarted = true;
+            animate();
+        }
     }
 
     function createAxes() {
@@ -231,6 +239,15 @@
 
     function animate() {
         requestAnimationFrame(animate);
+        const now = performance.now();
+        frameTimes.push(now);
+        if (frameTimes.length > fpsSamples) {
+            frameTimes.shift();
+        }
+        if (frameTimes.length >= 2) {
+            const timeSpan = frameTimes[frameTimes.length - 1] - frameTimes[0];
+            fps = Math.round((frameTimes.length - 1) * 1000 / timeSpan);
+        }
         controls?.update();
         renderer?.render(scene, camera);
     }
@@ -263,6 +280,7 @@
     });
 
 </script>
+<span style="display: block; position: fixed">Fps: {fps}</span>
 <section>
     <div style="display: flex; align-items: center; justify-content: center; ">
         <table>
